@@ -93,6 +93,8 @@ Servo thrusterV;
 byte thr_V_Pin = 6;
 byte thr_H_Pin = 5;
 
+int THR_H;
+int THR_V;
 
 // save old thr values
 int oldThrVcmd = 0, oldThrHcmd = 0;
@@ -142,22 +144,16 @@ if (received){
       return;  // not my device
       
     // Map the values received to THR accepted values
-    int THR_H = mapValue(RovCmdVals[4]);
-    int THR_V = mapValue(RovCmdVals[5]);
+    THR_H = mapValue(RovCmdVals[4]);
+    THR_V = mapValue(RovCmdVals[5]);
 
     /* 
      *  Apply thrP cmds from master THR_PORT_H and THR_PORT_V (index 2 & 3 respectively)
      *  Blue robotics documantation uses writeMicroseconds instead of write 
      *  But we will use write for testing purposes.
      */
-    // dont do anything if new thr values equal previous thr values 
-     if(THR_V == oldThrVcmd && THR_H == oldThrHcmd){
-        thrusterV.writeMicroseconds(THR_V);
-        thrusterH.writeMicroseconds(THR_H);
-     }
-
-    oldThrVcmd = THR_V;
-    oldThrHcmd = THR_H;
+    thrusterV.writeMicroseconds(THR_V);
+    thrusterH.writeMicroseconds(THR_H);
     
     /*
      * Get and set status values to sending array 
@@ -170,7 +166,7 @@ if (received){
      * Send thr status to Master
      */
     byte StatusThrP [] = {
-        22,     
+        33,     
         RovCmdVals[2],      
         RovCmdVals[3],    
         RovCmdVals[4],    

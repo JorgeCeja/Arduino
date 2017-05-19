@@ -87,10 +87,10 @@ const byte LCD_D5 = 5;
 const byte LCD_D6 = 6;
 const byte LCD_D7 = 7;
 
-int THR_Y;
-int THR_X;
-int THR_ROTATE;
-int THR_SLIDER;
+byte THR_Y;
+byte THR_X;
+byte THR_ROTATE;
+byte THR_SLIDER;
 
  //LCD R/W pin to ground
 // include the library code:
@@ -106,8 +106,8 @@ const byte ENABLE_PIN = 2; // checked to be true on the ROV shield
  *   Thruster controls (PIN 9-11)
  *   RIGHT CONTROLLER
  */
-const byte UP_DOWN_T = 8; // Joystick
-const byte LEFT_RIGHT_T = 9; // Joystick
+const byte UP_DOWN_T = 9; // Joystick
+const byte LEFT_RIGHT_T = 8; // Joystick
 const byte ROTATE_T = 10; // Joystick
 const byte SLIDER_T = 11; // Joystick
 
@@ -119,6 +119,8 @@ const byte UP_DOWN_A = 13; // Joystick
 const byte LEFT_RIGHT_A = 12; // Joystick
 const byte ROTATE_A = 14; // Joystick
 const byte SLIDER_A = 15; // Joystick
+
+byte received;
 
 void fWrite (const byte what) {
   Serial.write (what);  
@@ -149,6 +151,8 @@ void loop(){
   // THR VALUES FROM RIGHT CONTROLLER
   THR_Y = mapValue(analogRead(UP_DOWN_T));
   THR_X = mapValue(analogRead(LEFT_RIGHT_T));
+  // FLIP VALUES DUE TO CONTROLLER
+  THR_X = (255-THR_X);
   THR_ROTATE = mapValue(analogRead(ROTATE_T));
   THR_SLIDER = mapValue(analogRead(SLIDER_T));
   
@@ -166,50 +170,63 @@ void loop(){
   /*
    * LOGIC TO DRIVE THE THRUSTERS
    */
+  if(THR_Y > 150){
   // move forward and back 
   THR_PORT_H = THR_Y;
-  THR_STBD_H = THR_Y;
+  // WRONG ON THE HARDWARE SIDE
+  THR_STBD_H = THR_Y; 
+  }
 
+  if(THR_Y < 100){
+  // move forward and back 
+  THR_PORT_H = THR_Y;
+  // WRONG ON THE HARDWARE SIDE
+  THR_STBD_H = THR_Y; 
+  }
+
+  if(THR_SLIDER > 150){
   // move up and down
   THR_PORT_V = THR_SLIDER;
   THR_STBD_V = THR_SLIDER;
+  }
+
+ if(THR_SLIDER < 100){
+  // move up and down
+  THR_PORT_V = THR_SLIDER;
+  THR_STBD_V = THR_SLIDER;
+  }
 
   // rotate
-  if(THR_ROTATE > 127.5){ // right
-    THR_STBD_H = THR_ROTATE;
-    THR_PORT_H = (255-THR_ROTATE);  // opposite
+  if(THR_ROTATE > 150){ // right
+    THR_STBD_H = (255-THR_ROTATE);
+    THR_PORT_H = THR_ROTATE;  // opposite
   } 
   
-  else { //left
+  if(THR_ROTATE < 100) { //left
     THR_STBD_H = (255-THR_ROTATE);  // opposite
     THR_PORT_H = THR_ROTATE;
   }
 
   // slide
-  if(THR_X > 127.5){ // right
+  if(THR_X > 150){ // right
     //left goes positive
     THR_PORT_V = THR_X;
     THR_STBD_V = (255-THR_X);  // opposite
   } 
 
-  else{ // left
-    THR_PORT_V = (255-THR_X);  // opposite
-    THR_STBD_V = THR_X;
+  if(THR_X < 100){ // left
+    THR_PORT_V = THR_X;  // opposite
+    THR_STBD_V = (255-THR_X);
   }
-
-  THR_PORT_H  = byte (THR_PORT_H);    // output value for the Port Horizontal
-  THR_PORT_V   = byte (THR_PORT_V);   // output value for the Port Vertical
-  THR_STBD_H  = byte (THR_STBD_H);    // output value for the Stbd Horizontal
-  THR_STBD_V   = byte (THR_STBD_V);   // output value for the Stbd Vertical
   
   // assemble message
   byte RovCmdVals [] = { 
   ROV_CMD_VAL,     
   44,    // this is the header. Change it
-  THR_PORT_H,
-  THR_PORT_V,     
-  THR_STBD_H,       
-  THR_STBD_V,      
+  THR_PORT_V,
+  THR_PORT_H,     
+  THR_STBD_V,       
+  THR_STBD_H,      
   ARM_MAIN,         
   ARM_WRIST,        
   ARM_GRIP,
@@ -230,10 +247,16 @@ void loop(){
   enablePinLow();  // disable sending
   
   // receive response  
-  byte received = recvMsg (fAvailable, fRead, StatusBuf, MAX_BFR_SIZE);
+  received = recvMsg (fAvailable, fRead, StatusBuf, MAX_BFR_SIZE);
 
   displayStatus(received);
-    
+
+  THR_PORT_H  = 127.5;    
+  THR_PORT_V   = 127.5; 
+  THR_STBD_H  = 127.5; 
+  THR_STBD_V   = 127.5;   
+
+
 }  // end of loop
 
 void enablePinLow() {
@@ -263,11 +286,18 @@ void displayStatus(byte received){
   if (received == 0) {
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("Error!");
+//    lcd.print("Error!");
+    lcd.print("X:");
+    lcd.print(THR_X);
+    lcd.print(" Y:");
+    lcd.print(THR_Y);
     
     // DEBUGING PURPOSES
     lcd.setCursor(0,1);
-    lcd.print("PLACE HOLDER");
+    lcd.print("R:");
+    lcd.print(THR_ROTATE);
+    lcd.print(" S:");
+    lcd.print(THR_SLIDER);
   }  // end of if
     
   else {
@@ -307,13 +337,15 @@ void displayStatus(byte received){
       // THR STBD STATUS
       case 33:
         lcd.setCursor(0, 0);
+        lcd.print("M:");
         lcd.print(THR_STBD_H);
         lcd.print(":");
         lcd.print(THR_STBD_V);
         lcd.setCursor(0,1);
-        lcd.print((StatusBuf[14]<<8)|StatusBuf[13]);
+        lcd.print("S:");
+        lcd.print(StatusBuf[3]);
         lcd.print(":");
-        lcd.print(StatusBuf[12]);
+        lcd.print(StatusBuf[4]);
         break;
       default :
         lcd.print("NOTHING");

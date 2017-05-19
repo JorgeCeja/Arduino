@@ -90,9 +90,11 @@ byte StatusBuf [MAX_BFR_SIZE];
 Servo thrusterH;
 Servo thrusterV;
 
-byte thr_V_Pin = 5;
-byte thr_H_Pin = 6;
+byte thr_V_Pin = 6;
+byte thr_H_Pin = 5;
 
+int THR_H;
+int THR_V;
 
 // save old thr values
 int oldThrVcmd = 0, oldThrHcmd = 0;
@@ -142,23 +144,17 @@ if (received){
       return;  // not my device
       
     // Map the values received to THR accepted values
-    int THR_H = mapValue(RovCmdVals[2]);
-    int THR_V = mapValue(RovCmdVals[3]);
+    THR_H = mapValue(RovCmdVals[2]);
+    THR_V = mapValue(RovCmdVals[3]);
 
     /* 
      *  Apply thrP cmds from master THR_PORT_H and THR_PORT_V (index 2 & 3 respectively)
      *  Blue robotics documantation uses writeMicroseconds instead of write 
      *  But we will use write for testing purposes.
      */
-    // dont do anything if new thr values equal previous thr values 
-     if(THR_V == oldThrVcmd && THR_H == oldThrHcmd){
-        thrusterV.writeMicroseconds(THR_V);
-        thrusterH.writeMicroseconds(THR_H);
-     }
+     thrusterV.writeMicroseconds(THR_V);
+     thrusterH.writeMicroseconds(THR_H);
 
-    oldThrVcmd = THR_V;
-    oldThrHcmd = THR_H;
-    
     /*
      * Get and set status values to sending array 
      * statses to send: 
