@@ -82,25 +82,42 @@ byte StatusVid [VID_BFR_SIZE];
 byte StatusBuf [MAX_BFR_SIZE]; 
 
 #include "RS485_protocol.h"
-
-// save old thr values
-int oldArmMain = 0, oldArmWrist = 0;
+#include <Stepper.h>
 
 const byte ENABLE_PIN = 11; // checked to be true on the ARM PUCK
 
 // defines pins numbers
-const int STEP1 = 10;
-const int STEP2 = 9; 
-const int STEP3 = 8;
-const int STEP4 = 7;
-const int STEP_DIR = 12; 
+const byte STEP1 = 10;
+const byte STEP2 = 9; 
+const byte STEP3 = 8;
+const byte STEP4 = 7;
+const byte STEP_DIR = 12; 
 
 // EasyDriver MS pins
 const int MS1 = 4; 
 const int MS2 = 5; 
 const int MS3 = 6;
 
-int step_speed = 10;  // Speed of Stepper motor (higher = slower)
+/* Configure type of Steps on EasyDriver:
+// MS1 MS2
+//
+// LOW = 0 -- HIGH = 1 
+//
+// LOW LOW = Full Step //
+// HIGH LOW = Half Step //
+// LOW HIGH = A quarter of Step //
+// HIGH HIGH = An eighth of Step //
+*/
+const int ms1_setting = 0; 
+const int ms2_setting = 0;
+const int ms3_setting = 0;
+
+const int stepSpeed = 585;  // Speed of Stepper motor (higher = slower)
+
+byte ARM_MAIN;
+byte ARM_WRIST;
+byte ARM_GRIP;
+byte ARM_OTHER;
 
 void fWrite (const byte what) {
   Serial.write (what);  
@@ -120,8 +137,15 @@ void setup(){
   pinMode (ENABLE_PIN, OUTPUT);  // driver output enable
   Serial.setTimeout(100);
 
+  // ms config
   pinMode(MS1, OUTPUT);
   pinMode(MS2, OUTPUT);
+  pinMode(MS3, OUTPUT);
+
+  // ms setting
+  digitalWrite(MS1, ms1_setting);    
+  digitalWrite(MS2, ms2_setting);
+  digitalWrite(MS3, ms3_setting);
   
   // Sets the two pins as Outputs
   pinMode(STEP1,OUTPUT); 
@@ -130,17 +154,13 @@ void setup(){
   pinMode(STEP4,OUTPUT);  
   pinMode(STEP_DIR,OUTPUT);
 
-  /* Configure type of Steps on EasyDriver:
-  // MS1 MS2
-  //
-  // LOW LOW = Full Step //
-  // HIGH LOW = Half Step //
-  // LOW HIGH = A quarter of Step //
-  // HIGH HIGH = An eighth of Step //
-  */
-
-  digitalWrite(MS1, LOW);      // Configures to Full Steps
-  digitalWrite(MS2, LOW);    // Configures to Full Steps
+  // Step and direction settings
+  // Ensures all stepers start up correctly
+  digitalWrite(STEP1, LOW);
+  digitalWrite(STEP2, LOW);
+  digitalWrite(STEP3, LOW);
+  digitalWrite(STEP4, LOW);
+  digitalWrite(STEP_DIR, LOW);
   
   enablePinLow(); // disable sending on enable pin
 }
@@ -156,31 +176,45 @@ if (received){
       return;  // not my device
       
     // Map the values received to THR accepted values
-    int ARM_MAIN = mapValue(RovCmdVals[6]);
-    int ARM_WRIST = mapValue(RovCmdVals[7]);
-    int ARM_GRIP = mapValue(RovCmdVals[8]);
-    int ARM_OTHER = mapValue(RovCmdVals[9]);
+    ARM_MAIN = RovCmdVals[6];
+    ARM_WRIST = RovCmdVals[7];
+    ARM_GRIP = RovCmdVals[8];
+    ARM_OTHER = RovCmdVals[9];
 
+        /*
+         * Logic to drive one motor at a time
+         */
+        // Main
+        if(ARM_MAIN > ARM_WRIST && ARM_MAIN > ARM_GRIP && ARM_MAIN > ARM_OTHER){
+         moveStepper(STEP1, 1);
+        }
+        if(ARM_MAIN < ARM_WRIST && ARM_MAIN < ARM_GRIP && ARM_MAIN < ARM_OTHER){
+         moveStepper(STEP1, 0);
+        } 
 
-    // do actions if new thr values don't equal like the previous arm values 
-//     if(ARM_MAIN != oldArmMain && ARM_WRIST != oldArmWrist){
-       if(true){
-         moveStepper(ARM_MAIN, STEP1);
-         moveStepper(ARM_WRIST, STEP2);
-         moveStepper(ARM_GRIP, STEP3);
-         moveStepper(ARM_OTHER, STEP4);
-  }
-    
+        // Wrist
+        if(ARM_WRIST > ARM_MAIN && ARM_WRIST > ARM_GRIP && ARM_WRIST > ARM_OTHER){
+         moveStepper(STEP2, 1);
+        }
+        if(ARM_WRIST < ARM_MAIN && ARM_WRIST < ARM_GRIP && ARM_WRIST < ARM_OTHER){
+         moveStepper(STEP2, 0);
+        } 
 
-    oldArmMain = ARM_MAIN;
-    oldArmWrist = ARM_WRIST;
-    
-    /*
-     * Get and set status values to sending array 
-     * statses to send: 
-     * System Voltage, Heading, Pressure, Temperature, 
-     * (calculated) Depth, Leak detector, thr current,  
-     */
+        // Grip
+        if(ARM_GRIP > ARM_MAIN && ARM_GRIP > ARM_WRIST && ARM_GRIP > ARM_OTHER){
+         moveStepper(STEP3, 1);
+        }
+        if(ARM_GRIP < ARM_MAIN && ARM_GRIP < ARM_WRIST && ARM_GRIP < ARM_OTHER){
+         moveStepper(STEP3, 0);
+        }
+
+        // Other
+        if(ARM_OTHER > ARM_MAIN && ARM_OTHER > ARM_WRIST && ARM_OTHER > ARM_GRIP){
+         moveStepper(STEP4, 1);
+        }
+        if(ARM_OTHER < ARM_MAIN && ARM_OTHER < ARM_WRIST && ARM_OTHER < ARM_GRIP){
+         moveStepper(STEP4, 0);
+        }
 
     /*
      * Send thr status to Master
@@ -229,24 +263,13 @@ int mapValue(int data) {
   return map(data, 0, 255, 0, 255);
 }
 
-void moveStepper(int reading, int stepperNumber){
-  if (reading > 150) {  //  If joystick is moved Left
-           digitalWrite(STEP_DIR, LOW);  // (HIGH = anti-clockwise / LOW = clockwise)
-           
-           digitalWrite(stepperNumber, HIGH);
-           delay(step_speed);
-           digitalWrite(stepperNumber, LOW);
-           delay(step_speed);
-    }      
-  
-   if (reading < 100) {  // If joystick is moved right
-          digitalWrite(STEP_DIR, HIGH);  // (HIGH = anti-clockwise / LOW = clockwise)
-          
-          digitalWrite(stepperNumber, HIGH);
-          delay(step_speed);
-          digitalWrite(stepperNumber, LOW);
-          delay(step_speed); 
-   }
-  
+void moveStepper(int stepPin, int dir){
+  for(int i = 0; i < 10; i++){
+     digitalWrite(STEP_DIR, dir); // HIGH-1 = anti-clockwise / LOW-0 = clockwise
+     digitalWrite(stepPin, HIGH);
+     delayMicroseconds(stepSpeed);
+     digitalWrite(stepPin, LOW);
+     delayMicroseconds(stepSpeed); 
+  }
 }
 

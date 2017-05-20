@@ -92,6 +92,11 @@ byte THR_X;
 byte THR_ROTATE;
 byte THR_SLIDER;
 
+byte ARM_Y;
+byte ARM_X;
+byte ARM_ROTATE;
+byte ARM_SLIDER;
+
  //LCD R/W pin to ground
 // include the library code:
 #include <LiquidCrystal.h>
@@ -157,15 +162,44 @@ void loop(){
   THR_SLIDER = mapValue(analogRead(SLIDER_T));
   
   // ARM VALUES FROM LEFT CONTROLLER
-  ARM_MAIN = mapValue(analogRead(UP_DOWN_A));    
-  ARM_WRIST = mapValue(analogRead(LEFT_RIGHT_A));        
-  ARM_GRIP = mapValue(analogRead(ROTATE_A));
-  ARM_OTHER = mapValue(analogRead(SLIDER_A));
+  ARM_Y = mapValue(analogRead(UP_DOWN_A));    
+  ARM_X = mapValue(analogRead(LEFT_RIGHT_A));
+  // FLIP VALUES DUE TO CONTROLLER
+  ARM_X = (255-ARM_X);        
+  ARM_ROTATE = mapValue(analogRead(ROTATE_A));
+  ARM_SLIDER = mapValue(analogRead(SLIDER_A));
 
-  ARM_MAIN = byte (ARM_MAIN);    // output value for the Port Horizontal
-  ARM_WRIST = byte (ARM_WRIST);   // output value for the Port Vertical
-  ARM_GRIP = byte (ARM_GRIP);
-  ARM_OTHER = byte(ARM_OTHER);
+  /*
+   * LOGIC TO DRIVE STEPPERS
+   */
+  if(ARM_Y > 150){
+    ARM_MAIN = ARM_Y; 
+  }
+  if(ARM_Y < 100){
+    ARM_MAIN = ARM_Y;
+  }
+
+  if(ARM_X > 150){
+    ARM_WRIST = ARM_X; 
+  }
+  if(ARM_X < 100){
+    ARM_WRIST = ARM_X;
+  }
+
+  if(ARM_ROTATE > 150){
+    ARM_GRIP = ARM_ROTATE; 
+  }
+  if(ARM_ROTATE < 100){
+    ARM_GRIP = ARM_ROTATE;
+  }
+
+  if(ARM_SLIDER > 150){
+    ARM_OTHER = ARM_SLIDER; 
+  }
+  if(ARM_SLIDER < 100){
+    ARM_OTHER = ARM_SLIDER;
+  }
+
 
   /*
    * LOGIC TO DRIVE THE THRUSTERS
@@ -176,7 +210,6 @@ void loop(){
   // WRONG ON THE HARDWARE SIDE
   THR_STBD_H = THR_Y; 
   }
-
   if(THR_Y < 100){
   // move forward and back 
   THR_PORT_H = THR_Y;
@@ -189,7 +222,6 @@ void loop(){
   THR_PORT_V = THR_SLIDER;
   THR_STBD_V = THR_SLIDER;
   }
-
  if(THR_SLIDER < 100){
   // move up and down
   THR_PORT_V = THR_SLIDER;
@@ -201,7 +233,6 @@ void loop(){
     THR_STBD_H = (255-THR_ROTATE);
     THR_PORT_H = THR_ROTATE;  // opposite
   } 
-  
   if(THR_ROTATE < 100) { //left
     THR_STBD_H = (255-THR_ROTATE);  // opposite
     THR_PORT_H = THR_ROTATE;
@@ -213,13 +244,12 @@ void loop(){
     THR_PORT_V = THR_X;
     THR_STBD_V = (255-THR_X);  // opposite
   } 
-
   if(THR_X < 100){ // left
     THR_PORT_V = THR_X;  // opposite
     THR_STBD_V = (255-THR_X);
   }
   
-  // assemble message
+  // Assemble message
   byte RovCmdVals [] = { 
   ROV_CMD_VAL,     
   44,    // this is the header. Change it
@@ -237,7 +267,7 @@ void loop(){
   OUTPUT_CTL_BITS  
   };
   
-  // send to slave  
+  // Send to slave  
   enablePinHigh();  // enable sending
   
   sendMsg (fWrite, RovCmdVals, sizeof RovCmdVals);
@@ -246,17 +276,22 @@ void loop(){
 
   enablePinLow();  // disable sending
   
-  // receive response  
+  // Receive response  
   received = recvMsg (fAvailable, fRead, StatusBuf, MAX_BFR_SIZE);
 
   displayStatus(received);
 
+  // Reset THR values
   THR_PORT_H  = 127.5;    
   THR_PORT_V   = 127.5; 
   THR_STBD_H  = 127.5; 
   THR_STBD_V   = 127.5;   
 
-
+  ARM_MAIN = 127.5;         
+  ARM_WRIST = 127.5;      
+  ARM_GRIP = 127.5;
+  ARM_OTHER = 127.5;
+  
 }  // end of loop
 
 void enablePinLow() {
@@ -288,16 +323,16 @@ void displayStatus(byte received){
     lcd.setCursor(0, 0);
 //    lcd.print("Error!");
     lcd.print("X:");
-    lcd.print(THR_X);
+    lcd.print(ARM_WRIST);
     lcd.print(" Y:");
-    lcd.print(THR_Y);
+    lcd.print(ARM_MAIN);
     
     // DEBUGING PURPOSES
     lcd.setCursor(0,1);
     lcd.print("R:");
-    lcd.print(THR_ROTATE);
+    lcd.print(ARM_GRIP);
     lcd.print(" S:");
-    lcd.print(THR_SLIDER);
+    lcd.print(ARM_OTHER);
   }  // end of if
     
   else {
